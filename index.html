@@ -580,10 +580,78 @@
         cursor: grab;
     }
 
-    /* Evita que o usuário selecione acidentalmente as imagens/vídeos ao arrastar */
-    .reel-card {
+    Exatamente assim ! Seu CSS está perfeito e muito bem estruturado. Só há um detalhe que vale a pena ajustar para evitar que os estilos se sobrescrevam (conflito de declaração repetida) e garantir que o carrossel continue funcionando com o dedo no celular. O Pequeno Ajuste (Apenas limpeza de código) Você declarou a classe .reel-card duas vezes seguidas. Na segunda vez,
+    você adicionou pointer-events: auto;
+    . Se você deixar auto ali embaixo,
+    ele vai anular o pointer-events: none;
+    que você colocou no vídeo logo acima,
+    o que pode fazer o vídeo bloquear o clique no celular de novo. Aqui está o seu CSS otimizado e limpo,
+    pronto para rodar: CSS
+
+    /* ==========================================================================
+   ESTILO REELS POPUP (LIGHTBOX MODAL)
+   ========================================================================== */
+    .reels-modal {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.95);
+        justify-content: center;
+        align-items: center;
+    }
+
+    .reels-modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        width: 100%;
+        max-width: 420px;
+        /* Proporção exata de uma tela de celular vertical */
+        height: 90vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+    }
+
+    .modal-content video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        /* Faz o vídeo preencher a tela como no Instagram */
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .close-reels {
+        position: absolute;
+        top: 20px;
+        right: 25px;
+        color: #fff;
+        font-size: 40px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 10000;
         user-select: none;
-        pointer-events: auto;
+    }
+
+    /* ==========================================================================
+   AJUSTES DOS CARDS DOS REELS
+   ========================================================================== */
+    .reel-card {
+        cursor: pointer;
+        user-select: none;
+        /* Evita selecionar textos/imagens ao arrastar */
+    }
+
+    .reel-card video {
+        pointer-events: none;
+        /* CRUCIAL: Faz o clique passar pelo vídeo e ativar o card */
     }
 
     .seta-carrossel {
@@ -1429,15 +1497,35 @@
             padding: 12px 30px;
             font-size: 0.8rem;
         }
+
+        .carousel-track,
+        #carouselTrack {
+            display: flex;
+            gap: 20px;
+            /* Alinhado com os 20px calculados no JS */
+
+            /* CRITICAL: Permite o gesto horizontal e impede que o navegador trave o arrasto */
+            touch-action: pan-y;
+
+            /* Garante que o container não vai esmagar os cards */
+            will-change: transform;
+        }
+
+        /* Os cards individuais */
+        .reel-card {
+            min-width: calc(55% - 10px);
+            /* Mantendo o seu padrão atual */
+
+            /* Evita que o usuário selecione textos ou imagens sem querer enquanto arrasta */
+            user-select: none;
+            -webkit-user-drag: none;
+        }
     }
 
     .hero-container {
         height: 350px;
     }
-
-
 </style>
-
 <body>
 
     <header class="main-header" id="mainHeader">
@@ -1720,17 +1808,15 @@
         });
     </script>
 
-    <script>
+      <script>
         document.addEventListener("DOMContentLoaded", function () {
 
             /* ==========================================================================
                1. CABEÇALHO DINÂMICO (EFEITO SCROLL)
                ========================================================================== */
             const header = document.querySelector(".main-header");
-
             if (header) {
                 window.addEventListener("scroll", function () {
-                    // Se o usuário rolar mais de 50px, adiciona a classe .scrolled do seu CSS
                     if (window.scrollY > 50) {
                         header.classList.add("scrolled");
                     } else {
@@ -1747,13 +1833,10 @@
 
             if (menuToggle && navMenu) {
                 menuToggle.addEventListener("click", function () {
-                    // Abre/fecha a gaveta adicionando/removendo a classe .active
                     navMenu.classList.toggle("active");
-                    // Ativa a animação dos traços virando "X" adicionando/removendo a classe .open
                     menuToggle.classList.toggle("open");
                 });
 
-                // Fecha o menu automaticamente se um link interno for clicado (melhor usabilidade)
                 const menuLinks = navMenu.querySelectorAll("a");
                 menuLinks.forEach(function (link) {
                     link.addEventListener("click", function () {
@@ -1764,79 +1847,159 @@
             }
 
             /* ==========================================================================
-               3. CARROSSEL DE REELS (BOTÕES DE AVANÇAR E VOLTAR)
+               3. CARROSSEL DE REELS (ARRRASTO + CLIQUE PARA ABRIR ESTILO REELS)
                ========================================================================== */
-            const track = document.querySelector(".carousel-track");
+            const track = document.querySelector(".carousel-track") || document.getElementById('carouselTrack');
             const prevBtn = document.querySelector(".carousel-arrows .arrow-btn:first-child") || document.getElementById("prevBtn");
             const nextBtn = document.querySelector(".carousel-arrows .arrow-btn:last-child") || document.getElementById("nextBtn");
 
+            // Cria a estrutura do Modal dinamicamente se não existir no HTML
+            let modal = document.getElementById("reelsModal");
+            if (!modal) {
+                modal = document.createElement("div");
+                modal.id = "reelsModal";
+                modal.className = "reels-modal";
+                modal.innerHTML = `
+                <span class="close-reels">&times;</span>
+                <div class="modal-content">
+                    <video id="modalVideo" controls autoplay playsinline></video>
+                </div>
+            `;
+                document.body.appendChild(modal);
+            }
+
+            const modalVideo = document.getElementById("modalVideo");
+            const closeBtn = modal.querySelector(".close-reels");
+
+            // Fechar o modal de vídeo
+            closeBtn.addEventListener("click", function () {
+                modal.classList.remove("active");
+                modalVideo.pause();
+                modalVideo.src = ""; // Reseta o vídeo
+            });
+
+            modal.addEventListener("click", function (e) {
+                if (e.target === modal) {
+                    modal.classList.remove("active");
+                    modalVideo.pause();
+                    modalVideo.src = "";
+                }
+            });
+
             if (track) {
                 let index = 0;
+                let startX = 0;
+                let moveX = 0;
+                let isDragging = false;
+                let startTime = 0;
 
-                // Identifica quantos itens estão visíveis por vez com base nos breakpoints do seu CSS
                 function getVisibleCards() {
-                    if (window.innerWidth <= 768) return 1.3;  // Sincronizado com: min-width: calc(70% - 10px)
-                    if (window.innerWidth <= 1024) return 3;   // Sincronizado com: min-width: calc(33.333% - 14px)
-                    return 5;                                  // Sincronizado com: min-width: calc(20% - 16px)
+                    if (window.innerWidth <= 768) return 1.82;
+                    if (window.innerWidth <= 1024) return 3;
+                    return 5;
                 }
 
-                // Evento para avançar o carrossel
-                if (nextBtn) {
-                    nextBtn.addEventListener("click", function () {
-                        const cards = document.querySelectorAll(".reel-card");
-                        if (cards.length === 0) return;
+                function updateCarousel() {
+                    const cards = track.querySelectorAll(".reel-card");
+                    if (cards.length === 0) return;
 
-                        const visibleCards = getVisibleCards();
-                        const maxIndex = cards.length - Math.ceil(visibleCards);
+                    const visibleCards = getVisibleCards();
+                    const maxIndex = Math.max(0, cards.length - Math.ceil(visibleCards));
 
-                        if (index < maxIndex) {
-                            index++;
-                            // Calcula a largura dinâmica do card + o gap de 20px definido no seu CSS
-                            const cardWidth = cards[0].getBoundingClientRect().width + 20;
-                            track.style.transform = `translateX(-${index * cardWidth}px)`;
+                    if (index > maxIndex) index = maxIndex;
+                    if (index < 0) index = 0;
+
+                    const cardWidth = cards[0].getBoundingClientRect().width + 20;
+                    track.style.transition = "transform 0.3s ease-out";
+                    track.style.transform = `translateX(-${index * cardWidth}px)`;
+                }
+
+                if (nextBtn) nextBtn.addEventListener("click", () => { index++; updateCarousel(); });
+                if (prevBtn) prevBtn.addEventListener("click", () => { if (index > 0) index--; updateCarousel(); });
+
+                // Mover carrossel com o dedo
+                track.addEventListener('touchstart', function (e) {
+                    startX = e.touches[0].clientX;
+                    isDragging = true;
+                    startTime = new Date().getTime();
+                    track.style.transition = "none";
+                }, { passive: true });
+
+                track.addEventListener('touchmove', function (e) {
+                    if (!isDragging) return;
+                    moveX = e.touches[0].clientX - startX;
+                    const cards = track.querySelectorAll(".reel-card");
+                    if (cards.length === 0) return;
+                    const cardWidth = cards[0].getBoundingClientRect().width + 20;
+                    const currentTranslate = -(index * cardWidth) + moveX;
+                    track.style.transform = `translateX(${currentTranslate}px)`;
+                }, { passive: true });
+
+                track.addEventListener('touchend', function (e) {
+                    if (!isDragging) return;
+                    isDragging = false;
+
+                    const endTime = new Date().getTime();
+                    const duration = endTime - startTime;
+
+                    // SE FOI UM CLIQUE RÁPIDO: Abre o Reels em tela cheia
+                    if (Math.abs(moveX) < 10 && duration < 250) {
+                        const card = e.target.closest('.reel-card');
+                        if (card) {
+                            const originalVideo = card.querySelector('video');
+                            if (originalVideo) {
+                                // Pega o arquivo de vídeo do card clicado e joga no modal com som ativo
+                                modalVideo.src = originalVideo.src;
+                                modalVideo.muted = false;
+                                modal.classList.add("active");
+                                modalVideo.play().catch(err => console.log("Autoplay barrado:", err));
+                            }
+                        }
+                    } else {
+                        // SE FOI ARRASTO: Passa o carrossel pro lado
+                        if (moveX < -50) index++;
+                        else if (moveX > 50) index--;
+                    }
+
+                    moveX = 0;
+                    updateCarousel();
+                });
+
+                // Permite clicar também no computador usando o mouse
+                track.querySelectorAll('.reel-card').forEach(card => {
+                    card.addEventListener('click', function (e) {
+                        // Evita disparar duas vezes no mobile
+                        if (window.matchMedia("(pointer: coarse)").matches) return;
+                        const originalVideo = this.querySelector('video');
+                        if (originalVideo) {
+                            modalVideo.src = originalVideo.src;
+                            modalVideo.muted = false;
+                            modal.classList.add("active");
+                            modalVideo.play();
                         }
                     });
-                }
+                });
 
-                // Evento para voltar o carrossel
-                if (prevBtn) {
-                    prevBtn.addEventListener("click", function () {
-                        const cards = document.querySelectorAll(".reel-card");
-                        if (cards.length === 0) return;
-
-                        if (index > 0) {
-                            index--;
-                            const cardWidth = cards[0].getBoundingClientRect().width + 20;
-                            track.style.transform = `translateX(-${index * cardWidth}px)`;
-                        }
-                    });
-                }
-
-                // Evita desalinhamentos caso o usuário mude a orientação do celular ou redimensione a janela
                 window.addEventListener("resize", function () {
                     index = 0;
-                    track.style.transform = "translateX(0px)";
+                    updateCarousel();
                 });
             }
 
             /* ==========================================================================
                4. CARROSSEL DE CLIENTES/MARCAS
                ========================================================================== */
-            // Como você aplicou overflow-x: auto e ocultou a scrollbar no CSS, este trecho
-            // mapeia as setas `.seta-carrossel` para realizar o scroll horizontal suave.
             const marcasWrapper = document.querySelector(".marcas-wrapper");
             const setaEsquerda = document.querySelector(".seta-carrossel:first-child");
             const setaDireita = document.querySelector(".seta-carrossel:last-child");
 
             if (marcasWrapper) {
-                const scrollAmount = 300; // Quantidade de pixels a deslizar por clique
-
+                const scrollAmount = 300;
                 if (setaDireita) {
                     setaDireita.addEventListener("click", function () {
                         marcasWrapper.scrollBy({ left: scrollAmount, behavior: "smooth" });
                     });
                 }
-
                 if (setaEsquerda) {
                     setaEsquerda.addEventListener("click", function () {
                         marcasWrapper.scrollBy({ left: -scrollAmount, behavior: "smooth" });
@@ -1844,48 +2007,6 @@
                 }
             }
         });
-
-        const track = document.getElementById('carouselTrack');
-        let isDragging = false;
-        let startX = 0;
-        let currentTranslate = 0;
-        let prevTranslate = 0;
-        let animationId = 0;
-
-        // Eventos para Mobile (Toque)
-        track.addEventListener('touchstart', touchStart);
-        track.addEventListener('touchend', touchEnd);
-        track.addEventListener('touchmove', touchMove);
-
-        function touchStart(event) {
-            isDragging = true;
-            startX = event.touches[0].clientX;
-            // Cancela animações anteriores para não dar conflito durante o arrasto
-            cancelAnimationFrame(animationId);
-        }
-
-        function touchMove(event) {
-            if (!isDragging) return;
-
-            const currentX = event.touches[0].clientX;
-            const currentTranslate = prevTranslate + (currentX - startX);
-
-            // Move o carrossel visualmente enquanto arrasta
-            track.style.transform = `translateX(${currentTranslate}px)`;
-        }
-
-        function touchEnd() {
-            isDragging = false;
-
-            // Atualiza a posição final para o próximo arrasto
-            // Aqui extraímos o valor real do translateX atual
-            const matrix = window.getComputedStyle(track).transform;
-            if (matrix !== 'none') {
-                prevTranslate = parseInt(matrix.split(',')[4]);
-            }
-
-            // Opcional: Adicione aqui uma lógica para alinhar (snap) ao card mais próximo se desejar
-        }
     </script>
 </body>
 </body>
