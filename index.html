@@ -1822,6 +1822,9 @@
                     track.style.transform = `translateX(-${index * cardWidth}px)`;
                 }
 
+                // Executa uma vez no início para ajustar o posicionamento inicial
+                updateCarousel();
+
                 // Evento Avançar
                 if (nextBtn) {
                     nextBtn.addEventListener("click", function () {
@@ -1847,6 +1850,7 @@
                 // --- LÓGICA DE TOQUE (TOUCH) CORRIGIDA ---
                 track.addEventListener('touchstart', function (e) {
                     startX = e.touches[0].clientX;
+                    moveX = 0; // CORREÇÃO: Zera o movimento anterior para não bugar o próximo toque
                     isDragging = true;
                     track.style.transition = "none"; // Remove transição enquanto arrasta para ficar fluido
                 }, { passive: true });
@@ -1876,8 +1880,7 @@
                         index--;
                     }
 
-                    // Reseta a variável de movimento e renderiza na posição correta
-                    moveX = 0;
+                    // Renderiza na posição correta e depois reseta
                     updateCarousel();
                 });
 
