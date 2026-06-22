@@ -1807,14 +1807,24 @@
             });
         });
     </script>
+   <script>
+        // Script do Mapa Global
+        document.querySelectorAll('.mapa-global-container .marker-wrapper').forEach(marker => {
+            marker.addEventListener('click', function (e) {
+                const local = this.querySelector('.tooltip').innerText;
+                console.log("Selecionado: " + local);
+            });
+        });
+    </script>
 
-      <script>
+    <script>
         document.addEventListener("DOMContentLoaded", function () {
 
             /* ==========================================================================
                1. CABEÇALHO DINÂMICO (EFEITO SCROLL)
                ========================================================================== */
             const header = document.querySelector(".main-header");
+
             if (header) {
                 window.addEventListener("scroll", function () {
                     if (window.scrollY > 50) {
@@ -1847,54 +1857,20 @@
             }
 
             /* ==========================================================================
-               3. CARROSSEL DE REELS (ARRRASTO + CLIQUE PARA ABRIR ESTILO REELS)
+               3. CARROSSEL DE REELS (BOTÕES + TOUCH DE CELULAR UNIFICADOS)
                ========================================================================== */
             const track = document.querySelector(".carousel-track") || document.getElementById('carouselTrack');
             const prevBtn = document.querySelector(".carousel-arrows .arrow-btn:first-child") || document.getElementById("prevBtn");
             const nextBtn = document.querySelector(".carousel-arrows .arrow-btn:last-child") || document.getElementById("nextBtn");
-
-            // Cria a estrutura do Modal dinamicamente se não existir no HTML
-            let modal = document.getElementById("reelsModal");
-            if (!modal) {
-                modal = document.createElement("div");
-                modal.id = "reelsModal";
-                modal.className = "reels-modal";
-                modal.innerHTML = `
-                <span class="close-reels">&times;</span>
-                <div class="modal-content">
-                    <video id="modalVideo" controls autoplay playsinline></video>
-                </div>
-            `;
-                document.body.appendChild(modal);
-            }
-
-            const modalVideo = document.getElementById("modalVideo");
-            const closeBtn = modal.querySelector(".close-reels");
-
-            // Fechar o modal de vídeo
-            closeBtn.addEventListener("click", function () {
-                modal.classList.remove("active");
-                modalVideo.pause();
-                modalVideo.src = ""; // Reseta o vídeo
-            });
-
-            modal.addEventListener("click", function (e) {
-                if (e.target === modal) {
-                    modal.classList.remove("active");
-                    modalVideo.pause();
-                    modalVideo.src = "";
-                }
-            });
 
             if (track) {
                 let index = 0;
                 let startX = 0;
                 let moveX = 0;
                 let isDragging = false;
-                let startTime = 0;
 
                 function getVisibleCards() {
-                    if (window.innerWidth <= 768) return 1.82;
+                    if (window.innerWidth <= 768) return 1.3;
                     if (window.innerWidth <= 1024) return 3;
                     return 5;
                 }
@@ -1906,80 +1882,75 @@
                     const visibleCards = getVisibleCards();
                     const maxIndex = Math.max(0, cards.length - Math.ceil(visibleCards));
 
+                    // Força o index a ficar dentro dos limites
                     if (index > maxIndex) index = maxIndex;
                     if (index < 0) index = 0;
 
-                    const cardWidth = cards[0].getBoundingClientRect().width + 20;
+                    const cardWidth = cards[0].getBoundingClientRect().width + 20; // 20 é o Gap do CSS
                     track.style.transition = "transform 0.3s ease-out";
                     track.style.transform = `translateX(-${index * cardWidth}px)`;
                 }
 
-                if (nextBtn) nextBtn.addEventListener("click", () => { index++; updateCarousel(); });
-                if (prevBtn) prevBtn.addEventListener("click", () => { if (index > 0) index--; updateCarousel(); });
+                // Evento Avançar
+                if (nextBtn) {
+                    nextBtn.addEventListener("click", function () {
+                        const cards = track.querySelectorAll(".reel-card");
+                        const maxIndex = cards.length - Math.ceil(getVisibleCards());
+                        if (index < maxIndex) {
+                            index++;
+                            updateCarousel();
+                        }
+                    });
+                }
 
-                // Mover carrossel com o dedo
+                // Evento Voltar
+                if (prevBtn) {
+                    prevBtn.addEventListener("click", function () {
+                        if (index > 0) {
+                            index--;
+                            updateCarousel();
+                        }
+                    });
+                }
+
+                // --- LÓGICA DE TOQUE (TOUCH) CORRIGIDA ---
                 track.addEventListener('touchstart', function (e) {
                     startX = e.touches[0].clientX;
                     isDragging = true;
-                    startTime = new Date().getTime();
-                    track.style.transition = "none";
+                    track.style.transition = "none"; // Remove transição enquanto arrasta para ficar fluido
                 }, { passive: true });
 
                 track.addEventListener('touchmove', function (e) {
                     if (!isDragging) return;
                     moveX = e.touches[0].clientX - startX;
+
                     const cards = track.querySelectorAll(".reel-card");
                     if (cards.length === 0) return;
+
                     const cardWidth = cards[0].getBoundingClientRect().width + 20;
                     const currentTranslate = -(index * cardWidth) + moveX;
+
+                    // Move o carrossel em tempo real com o dedo
                     track.style.transform = `translateX(${currentTranslate}px)`;
                 }, { passive: true });
 
-                track.addEventListener('touchend', function (e) {
+                track.addEventListener('touchend', function () {
                     if (!isDragging) return;
                     isDragging = false;
 
-                    const endTime = new Date().getTime();
-                    const duration = endTime - startTime;
-
-                    // SE FOI UM CLIQUE RÁPIDO: Abre o Reels em tela cheia
-                    if (Math.abs(moveX) < 10 && duration < 250) {
-                        const card = e.target.closest('.reel-card');
-                        if (card) {
-                            const originalVideo = card.querySelector('video');
-                            if (originalVideo) {
-                                // Pega o arquivo de vídeo do card clicado e joga no modal com som ativo
-                                modalVideo.src = originalVideo.src;
-                                modalVideo.muted = false;
-                                modal.classList.add("active");
-                                modalVideo.play().catch(err => console.log("Autoplay barrado:", err));
-                            }
-                        }
-                    } else {
-                        // SE FOI ARRASTO: Passa o carrossel pro lado
-                        if (moveX < -50) index++;
-                        else if (moveX > 50) index--;
+                    // Se arrastou mais de 50px pro lado, muda o card (Snap)
+                    if (moveX < -50) {
+                        index++;
+                    } else if (moveX > 50) {
+                        index--;
                     }
 
+                    // Reseta a variável de movimento e renderiza na posição correta
                     moveX = 0;
                     updateCarousel();
                 });
 
-                // Permite clicar também no computador usando o mouse
-                track.querySelectorAll('.reel-card').forEach(card => {
-                    card.addEventListener('click', function (e) {
-                        // Evita disparar duas vezes no mobile
-                        if (window.matchMedia("(pointer: coarse)").matches) return;
-                        const originalVideo = this.querySelector('video');
-                        if (originalVideo) {
-                            modalVideo.src = originalVideo.src;
-                            modalVideo.muted = false;
-                            modal.classList.add("active");
-                            modalVideo.play();
-                        }
-                    });
-                });
-
+                // Ajuste de redimensionamento de tela
                 window.addEventListener("resize", function () {
                     index = 0;
                     updateCarousel();
@@ -1995,11 +1966,13 @@
 
             if (marcasWrapper) {
                 const scrollAmount = 300;
+
                 if (setaDireita) {
                     setaDireita.addEventListener("click", function () {
                         marcasWrapper.scrollBy({ left: scrollAmount, behavior: "smooth" });
                     });
                 }
+
                 if (setaEsquerda) {
                     setaEsquerda.addEventListener("click", function () {
                         marcasWrapper.scrollBy({ left: -scrollAmount, behavior: "smooth" });
